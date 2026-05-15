@@ -1,6 +1,6 @@
 {
   "name": "@fairyhunter13/opencode-enhancements",
-  "version": "1.0.0-fork.1",
+  "version": "1.0.0-fork.3",
   "description": "opencode enhancements plugin — adapted from oh-my-openagent",
   "type": "module",
   "main": "./dist/index.js",
