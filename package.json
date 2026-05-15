@@ -3,27 +3,27 @@
   "version": "1.0.0-fork.1",
   "description": "opencode enhancements plugin — adapted from oh-my-openagent",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/index.ts"
+    ".": "./dist/index.js",
+    "./server": "./dist/index.js"
   },
-  "files": ["src", "test"],
+  "files": ["dist"],
   "scripts": {
+    "build": "bun build src/index.ts --outdir=dist --target=node --format=esm && bun build src/index.ts --outdir=dist --target=bun --format=esm",
     "test": "bun test",
     "test:e2e": "OPENCODE_E2E=1 bun test test/e2e/",
     "test:all": "bun test && bun test:e2e",
     "typecheck": "bun run tsc --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "file:../../packages/plugin",
-    "@opencode-ai/sdk": "file:../../packages/sdk/js"
+    "@opencode-ai/plugin": "^1.15.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": "^1.4.0"
+    "@opencode-ai/plugin": "^1.15.0"
   }
 }
