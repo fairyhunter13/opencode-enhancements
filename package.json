@@ -1,0 +1,29 @@
+{
+  "name": "@fairyhunter13/opencode-enhancements",
+  "version": "1.0.0-fork.1",
+  "description": "opencode enhancements plugin — adapted from oh-my-openagent",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/index.ts"
+  },
+  "files": ["src", "test"],
+  "scripts": {
+    "test": "bun test",
+    "test:e2e": "OPENCODE_E2E=1 bun test test/e2e/",
+    "test:all": "bun test && bun test:e2e",
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "file:../../packages/plugin",
+    "@opencode-ai/sdk": "file:../../packages/sdk/js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "^1.4.0"
+  }
+}

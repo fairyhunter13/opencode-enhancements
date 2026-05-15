@@ -1,0 +1,5 @@
+export type { CompactionCheckpoint, CompactionGuardState } from "./types"
+export { captureCheckpoint, restoreCheckpoint, clearCheckpoint, buildCompactionContext, detectNoTextTail } from "./guard"
+export type { Todo } from "./guard"
+export { createCompactionGuardHook } from "./hook"
+export type { CompactionGuardHook, TodoItem } from "./hook"
