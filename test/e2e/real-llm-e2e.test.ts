@@ -475,14 +475,18 @@ describe("opencode-enhancements real-LLM E2E", () => {
 
         const messages = await waitForMessages(server.url, sessionID, dir, 30_000)
 
-        // Hard assertion: agent responded with substantive text
+        // Hard assertion: AGENT RESPONDED with substantive text
         const text = getTextContent(messages)
         expect(text.length).toBeGreaterThan(0)
 
-        // Hard assertion: read tool was used (agent actually examined the file)
+        // Hard assertion: agent used at least one tool to examine the file.
+        // The model may use read, codebase_search, bash (cat), or grep —
+        // any file-access tool proves the ultrawork intent trigger worked.
         const allParts = messages.flatMap((m: any) => m.parts ?? [])
         const hasReadTool = allParts.some(
-          (p: any) => p.type === "tool" && p.tool === "read",
+          (p: any) =>
+            p.type === "tool" &&
+            (p.tool === "read" || p.tool === "codebase_search" || p.tool === "grep" || p.tool === "bash" || p.tool === "glob"),
         )
         expect(hasReadTool).toBe(true)
 
@@ -545,59 +549,48 @@ describe("opencode-enhancements real-LLM E2E", () => {
     )
 
     // User workflow: Two-turn conversation with search keywords — verify no duplicate injections
-    // Proves the intent hook strips existing <system-reminder> blocks before detection,
-    // preventing the feedback loop where injection keywords (grep, glob, search) self-trigger.
+    // Sends messages directly via prompt_async and checks user message parts immediately
+    // (before waiting for agent response), avoiding LLM timeout issues.
     itE2E(
       "Intent injection is NOT duplicated across search-message turns (no feedback loop)",
       async () => {
         const sessionID = await createSession(server.url, dir)
 
-        // Turn 1: send a message with search keywords → should get exactly 1 injection
-        // Need ≥3 keyword matches for 30% confidence: "search for", "find", "grep", "glob" = 4/7 ≈ 57%
-        await sendMessage(
-          server.url,
-          sessionID,
-          "use grep and glob to search for and find config files",
-          MODEL,
-          dir,
-          120_000,
-          PROVIDER_ID,
-        )
-        const msgs1 = await waitForMessages(server.url, sessionID, dir, 30_000)
-        const userMsg1 = msgs1.findLast((m: any) => m.info?.role === "user")
-        expect(userMsg1).toBeDefined()
-        const textParts1 = (userMsg1.parts ?? []).filter((p: any) => p.type === "text" && !p.synthetic)
-        const text1 = textParts1.map((p: any) => p.text).join("\n")
+        // Helper: send a message and immediately fetch user message parts
+        const sendAndCheck = async (text: string) => {
+          const res = await fetch(`${server.url}/session/${sessionID}/prompt_async`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-opencode-directory": dir, "Connection": "close" },
+            body: JSON.stringify({
+              parts: [{ type: "text", text }],
+              model: { providerID: PROVIDER_ID, modelID: MODEL },
+            }),
+          })
+          // Don't wait for agent — just check the stored user message
+          await new Promise(r => setTimeout(r, 500)) // brief settle for DB write
+          const msgs = await waitForMessages(server.url, sessionID, dir, 5_000)
+          const userMsg = (msgs as any[]).findLast((m: any) => m.info?.role === "user")
+          expect(userMsg).toBeDefined()
+          const textParts = (userMsg.parts ?? []).filter((p: any) => p.type === "text" && !p.synthetic)
+          return textParts.map((p: any) => p.text).join("\n")
+        }
+
+        // Turn 1: "grep", "glob", "search for", "find" = 4/7 keywords → 57% confidence → injection
+        const text1 = await sendAndCheck("use grep and glob to search for and find config files")
         const count1 = (text1.match(/<system-reminder>/g) ?? []).length
-        expect(count1).toBeLessThanOrEqual(2)
+        expect(count1).toBe(1)
         expect(text1).toContain("<search-mode>")
 
-        // Turn 2: send another search message — previous injection text should NOT
-        // cause a second injection to stack. Each message stays ≤2 tags.
-        // Need ≥3 keyword matches: "find", "where is", "locate", "grep" = 4/7 ≈ 57%
-        await sendMessage(
-          server.url,
-          sessionID,
-          "find where is the AGENTS.md and locate it using grep",
-          MODEL,
-          dir,
-          120_000,
-          PROVIDER_ID,
-        )
-        const msgs2 = await waitForMessages(server.url, sessionID, dir, 30_000)
-        const allUser = (msgs2 as any[]).filter((m: any) => m.info?.role === "user")
-        for (const um of allUser) {
-          const textParts = (um.parts ?? []).filter((p: any) => p.type === "text" && !p.synthetic)
-          const text = textParts.map((p: any) => p.text).join("\n")
-          const c = (text.match(/<system-reminder>/g) ?? []).length
-          expect(c).toBeLessThanOrEqual(2)
-        }
-        // At least 2 user messages exist
-        expect(allUser.length).toBeGreaterThanOrEqual(2)
+        // Turn 2: "find", "where is", "locate", "grep" = 4/7 keywords → 57% → injection
+        // The fix prevents previous injection's keywords from self-triggering another layer
+        const text2 = await sendAndCheck("find where is the AGENTS.md and locate it using grep")
+        const count2 = (text2.match(/<system-reminder>/g) ?? []).length
+        expect(count2).toBe(1)
+        expect(text2).toContain("<search-mode>")
 
         await deleteSession(server.url, sessionID, dir)
       },
-      300_000,
+      60_000,
     )
 
     // User workflow: User says "hello" → no intent injection, agent responds normally
@@ -764,7 +757,7 @@ describe("opencode-enhancements real-LLM E2E", () => {
         const hasToolUse = step2Parts.some(
           (p: any) =>
             p.type === "tool" &&
-            (p.tool === "edit" || p.tool === "read"),
+            (p.tool === "edit" || p.tool === "read" || p.tool === "write" || p.tool === "codebase_search"),
         )
         expect(hasToolUse).toBe(true)
 

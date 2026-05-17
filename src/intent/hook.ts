@@ -21,6 +21,12 @@ function stripSystemReminders(text: string): string {
   return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim()
 }
 
+/** Check if text already starts with an intent injection (prevents double-injection
+ * when the hook fires multiple times on the same message). */
+function hasIntentInjection(text: string): boolean {
+  return /^\s*<system-reminder>\s*<!-- intent:/.test(text)
+}
+
 export function createIntentGateHook(ctx: PluginInput) {
   let lastDetectedIntent: string | null = null
 
@@ -40,6 +46,10 @@ export function createIntentGateHook(ctx: PluginInput) {
 
       const userText = output.parts[textPartIndex].text ?? ""
       if (userText.length < MIN_MESSAGE_LENGTH) return
+
+      // Skip if this part already has an intent injection — prevents double-injection
+      // when the hook fires multiple times (e.g. from prompt.ts wrapping re-processing).
+      if (hasIntentInjection(userText)) return
 
       // Strip existing system reminders to avoid self-triggering feedback loop:
       // the injected search-mode text contains keywords like "grep" and "glob"
