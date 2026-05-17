@@ -15,6 +15,12 @@ const OPTIMIZATIONS: Record<string, string> = {
   review: "Check correctness, completeness, and edge cases",
 }
 
+/** Strip <system-reminder>...</system-reminder> blocks to prevent intent detection
+ * from finding keywords inside previously-injected system reminders (feedback loop). */
+function stripSystemReminders(text: string): string {
+  return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim()
+}
+
 export function createIntentGateHook(ctx: PluginInput) {
   let lastDetectedIntent: string | null = null
 
@@ -35,7 +41,13 @@ export function createIntentGateHook(ctx: PluginInput) {
       const userText = output.parts[textPartIndex].text ?? ""
       if (userText.length < MIN_MESSAGE_LENGTH) return
 
-      const detection = detectIntent(userText)
+      // Strip existing system reminders to avoid self-triggering feedback loop:
+      // the injected search-mode text contains keywords like "grep" and "glob"
+      // that would otherwise match the search intent rules on the next detection.
+      const cleanedText = stripSystemReminders(userText)
+      if (cleanedText.length === 0) return
+
+      const detection = detectIntent(cleanedText)
       if (detection.intent === "general" || detection.confidence < MIN_CONFIDENCE) return
 
       lastDetectedIntent = detection.intent
